@@ -1,53 +1,29 @@
+import argparse
+import os
 import numpy as np
 import pandas as pd
 import librosa  # audio analysis library
-from librosa import display  # for plotting mel spectogram
 import handy_functions  # for sliding_window function for np.array
-from importlib import reload
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 
-reload(handy_functions)
-
-sns.set(style="whitegrid", rc={"figure.figsize": (12, 4),
-                               #    "legend.fontsize": "large",
-                               #    "axes.titlesize": "x-large",
-                               #    "xtick.labelsize": "x-large",
-                               #    "ytick.labelsize": "x-large",
-                               })
 
 ###########################################################################
 ###########################################################################
 
 
-def plot_speaking_time(speaking_time):
-    # Stacked bar chart
-    speaking_time.T.plot.bar(stacked=True)
-    # Pie chart of percentage time
-    speaking_time['time'].plot.pie(labels=['speaker ' + str(x) for x in speaking_time.index.tolist()],
-                                   autopct='%.f',
-                                   figsize=(6, 6))
-    pass
-
-
-def plot_speaker_timeline_from_pred(t, labels):
-    # Use the previously generated time range for the shape of X to plot
-    # labels vs time
-    plt.plot(t, labels)
-    plt.yticks(np.unique(labels).astype(int))
-    plt.xlim([0, t[-1]])
-    plt.ylabel('Speaker number id')
-    plt.xlabel('Time (seconds)')
-    plt.title('Speaker Timeline')
-    plt.show()
-    pass
+def save_meeting_stats(stats, outdir):
+    stats['timeline'].index.name = 'time'
+    for k in stats:
+        stats[k].to_csv('{}/{}.csv'.format(outdir, k))
 
 
 def get_meeting_stats(df, labelAccessor):
-    return {'speaking_time': calc_speaking_time(df, labelAccessor),
-            'n_times_spoken': calc_n_times_spoken(df, labelAccessor)}
+    stats = {'timeline': df,
+             'speaking_time': calc_speaking_time(df, labelAccessor),
+             'n_times_spoken': calc_n_times_spoken(df, labelAccessor)}
+    print(stats)
+    return stats
 
 
 def calc_speaking_time(df, labelAccessor):
@@ -55,7 +31,7 @@ def calc_speaking_time(df, labelAccessor):
     df0['speaking_time'] = df0.index
     t_step = df0['speaking_time'].diff(1).iloc[-1]
     df0 = (df0.groupby(labelAccessor).count()[
-        ['speaking_time']] * t_step).sort_values(by=['speaking_time'], ascending=False)
+               ['speaking_time']] * t_step).sort_values(by=['speaking_time'], ascending=False)
     return df0
 
 
@@ -67,93 +43,23 @@ def calc_n_times_spoken(df, labelAccessor):
     return df0
 
 
-# def plot_stfeatures():
-#     # generates the correct time labels for mfccs shape
-#     t = librosa.frames_to_time(
-#         np.arange(mfccs.shape[1]), sr=sr, hop_length=frame_step * sr)
-#     librosa.display.specshow(mfccs, x_axis='time', x_coords=t)
-#     plt.colorbar()
-#     plt.title('Unnormalised MFCCs (short-term features)')
-#     plt.tight_layout()
-#     pass
-
-
-# def plot_mtfeatures():
-#     # Plot NORMALISED mid-term features (rolling mean and std of mels)
-#     # note here we need to manually calculate the x_coords given shampe of
-#     # input array and in this case no need to input sr
-#     sr_X = (X_scaled.shape[0] - 1) / duration
-#     t = librosa.samples_to_time(np.arange(X_scaled.shape[0]), sr=sr_X)
-#     librosa.display.specshow(X_scaled.T, x_axis='time', x_coords=t)
-#     plt.colorbar()
-#     plt.title('Normalised mid-term features (mean)')
-#     plt.tight_layout()
-
-
-# def make_all_plots(y, sr):
-#     # Plot the sound wave
-#     librosa.display.waveplot(y, sr=sr)
-#     # Mel spectogram
-#     plot_stfeatures()
-#     plot_mtfeatures()
-#     pass
-
-
-# def get_truth_df(t, labels):
-#     # Compare to ground-truth to see the overall performance of the
-#     # classification
-#     truth = pd.read_csv('data/diarization/diarizationExample.segments',
-#                         names=['start', 'end', 'speaker'])
-#     # First map speakers to same labels from k-means
-#     truth['labels'] = np.where(truth['speaker'] == 'speakerA', 2,
-#                                np.where(truth['speaker'] == 'speakerB', 3,
-#                                         np.where(truth['speaker'] == 'speakerC', 1,
-#                                                  np.where(truth['speaker'] == 'speakerD', 0, np.nan)))).astype(int)
-#     # Upsample labels to match time array shape
-#     d = truth[['start', 'labels']].to_dict(orient='list')
-#     # This is an O(n) solution
-#     speakers = []
-#     i = 0
-#     for it in t:
-#         if i + 1 >= len(d['start']):
-#             speakers += [d['labels'][i]]
-#         elif it < d['start'][i + 1]:
-#             speakers += [d['labels'][i]]
-#         else:
-#             i += 1
-#             speakers += [d['labels'][i]]
-#         # print(i, it, len(speakers))  # for debugging
-#     df = pd.DataFrame(
-#         index=t, data={'truth': speakers, 'kmeans': labels.tolist()})
-#     return df
-
-
-# def plot_speaker_timeline_truth_and_pred(df, labelAccessor):
-#     # Speaker timeline
-#     df[[labelAccessor, 'truth']].plot()
-#     plt.yticks(np.unique(df['truth']).astype(int))
-#     plt.ylabel('Speaker number ID')
-#     plt.xlabel('Time (seconds)')
-#     plt.legend()
-#     plt.show()
-#     pass
-
-
 ###########################################################################
 ###########################################################################
 
-def analyze_my_meeting(fn, nspeakers, sr=16000,
-                       frame_size=50e-3, frame_step=25e-3):
+def analyzemymeeting(indir, nspeakers, sr=16000,
+                       frame_size=50e-3, frame_step=25e-3, outdir=False):
     """
     Parameters
     ----------
-    fn  :   .wav file location e.g. 'data/diarization/diarizationExample.wav'
+    indir  :   .wav file location e.g. 'data/diarization/diarizationExample.wav'
     sr  :   sampling freq, default=16kHz
     frame_size  :   n_fft in librosa, default 50 ms
     frame_step  :   hop_length in librosa, default 25 ms
     nspeakers   :   number of speakers in meeting (int)
 
     """
+    # Identify .wave file from input dir (WARNING: assuming only one file in the directory!!)
+    fn = os.path.join(indir, os.listdir(indir)[0])
 
     # Load with librosa with 16 kHz sampling freq (same as in pyAudioAnalysis)
     y, sr = librosa.load(fn, sr=sr)
@@ -203,17 +109,36 @@ def analyze_my_meeting(fn, nspeakers, sr=16000,
     # Create df of results to get stats and visualizations
     df = pd.DataFrame(index=t, data={'speaker_number_id': labels})
 
-    print(get_meeting_stats(df, 'speaker_number_id'))
-    plot_speaker_timeline_from_pred(t, labels)
+    stats = get_meeting_stats(df, 'speaker_number_id')
+    if outdir:
+        save_meeting_stats(stats, outdir)
 
+    # Remove file from uploads directory
+    os.remove(fn)
     # df = get_truth_df()
     pass
 
 
 def main():
-    analyze_my_meeting(
-        fn='data/diarization/diarizationExample.wav',
-        nspeakers=4)
+    """
+    Example inputs:
+    indir  :   '/Users/tsando/code/express-app/app-ejs/public/data/uploads'
+    nspeakers   :   4
+
+    Usage:  python analyzemymeeting.py /Users/tsando/code/express-app/app-ejs/public/data/uploads 4 /Users/tsando/code/express-app/app-ejs/public/data/csvs
+    """
+
+    # analyzemymeeting(indir='/Users/tsando/code/express-app/app-ejs/public/data/uploads',
+    #                    nspeakers=4,
+    #                    outdir='/Users/tsando/code/express-app/app-ejs/public/data/csvs')
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("indir", help="Input directory containing .wav file")
+    parser.add_argument("nspeakers", help="Number of speakers in meeting", type=int)
+    parser.add_argument("outdir", help="Output directory")
+    args = parser.parse_args()
+    analyzemymeeting(indir=args.indir, nspeakers=args.nspeakers, outdir=args.outdir)
+
     pass
 
 
