@@ -1,9 +1,9 @@
 # analyzemymeeting
 
-This project aims to get meeting statistics with the use of unsupervised machine-learning algorithms. 
-The idea is to deploy an app which can give you statistics on your meeting with nice visualisations.
-See my other repo ![analyzemymeeting-app](https://github.com/tsando/analyzemymeeting-app) 
-for the actual deployed application
+This project was the first part to developing [analyzemymeeting.com](http://analyzemymeeting.com/) - an app to get meeting statistics and visualisations. The first objective was to investigate how machine-learning could be used for this purpose. In particular we investigate how to build the input features from the audio recording and then using the k-means clustering algorithm to get various statistics on the meeting.
+
+See this other repo for the actual deployed application ![analyzemymeeting-app](https://github.com/tsando/analyzemymeeting-app).
+
 
 
 ![Example feature matrix](https://github.com/tsando/analyzemymeeting/blob/master/images/feature_matrix.png)
